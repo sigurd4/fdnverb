@@ -1,0 +1,18 @@
+[package]
+name = "fdnverb"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+vst = "0.4.0"
+array_math = "0.2.44"
+array_segments = "0.1.3"
+real_time_fir_iir_filters = "1.0.8"
+moddef = "0.2.2"
+num = "0.4.3"
+
+[lib]
+name = "fdnverb"
+crate-type = ["cdylib"]
