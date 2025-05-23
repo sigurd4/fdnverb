@@ -1,4 +1,4 @@
-use core::f64::consts::TAU;
+use core::{f64::consts::TAU, ops::Range};
 
 use real_time_fir_iir_filters::{conf::{All, HighPass}, filters::iir::first::FirstOrderFilter, param::{Omega, RC}, rtf::Rtf};
 use saturation::{tubes::Tube12AU7, Triode, TriodeClassA};
@@ -71,7 +71,8 @@ impl Default for Channel
 {
     fn default() -> Self
     {
-        const DY: f64 = 0.05;
+        const RANGE: Range<f64> = -20.0..20.0;
+        const RESOLUTION: usize = 1024;
         const R_T: f64 = (458.0 - 440.0)/(8.6/2.2e3);
         Self {
             filter_transformer: [
@@ -94,7 +95,7 @@ impl Default for Channel
                     r_p: R_T,
                     v_pp: 458.0,
                     v_c: 8.6
-                }.cache(DY),
+                }.cache(RANGE, RESOLUTION),
                 Default::default(),
                 RC {
                     r: 2.2e3*2.0,
@@ -107,7 +108,7 @@ impl Default for Channel
                     r_p: 100e3,
                     v_pp: 410.0,
                     v_c: 2.0
-                }.cache(DY),
+                }.cache(RANGE, RESOLUTION),
                 Default::default(),
                 RC {
                     r: 820.0,

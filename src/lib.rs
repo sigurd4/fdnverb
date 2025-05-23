@@ -11,9 +11,6 @@
 #![feature(impl_trait_in_bindings)]
 #![feature(future_join)]
 #![feature(array_try_map)]
-#![feature(const_trait_impl)]
-#![feature(specialization)]
-
 #![feature(generic_const_exprs)]
 
 use core::future::{join, Future};
