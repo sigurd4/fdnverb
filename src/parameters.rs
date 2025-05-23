@@ -5,7 +5,6 @@ use vst::util::AtomicFloat;
 
 use crate::*;
 
-const EQ_MAX: f32 = 10.0;
 pub const REVERB_CURVE: f32 = 0.01304303747559888;
 
 pub const FREQUENCY_MIN: f32 = 20.0;

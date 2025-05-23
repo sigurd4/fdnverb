@@ -60,7 +60,7 @@ impl FDNReverb
             feedback: 0.0,
             p: [0; _],
             g: [1.0; _],
-            q: util::hadamard_feedback_matrix(0.0),
+            q: util::hadamard_feedback_matrix(),
             z: [0.0; _]
         }
     }

@@ -11,6 +11,8 @@
 #![feature(impl_trait_in_bindings)]
 #![feature(future_join)]
 #![feature(array_try_map)]
+#![feature(const_trait_impl)]
+#![feature(specialization)]
 
 #![feature(generic_const_exprs)]
 
@@ -34,8 +36,8 @@ moddef::moddef!(
 );
 
 const CHANNEL_COUNT: usize = 2;
-const NUM_KERNELS: usize = 8;
 
+const EQ_MAX: f32 = 10.0;
 const LOG_MID: f64 = 0.1;
 
 #[cfg(test)]

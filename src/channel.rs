@@ -6,8 +6,8 @@ use saturation::{tubes::Tube12AU7, Triode, TriodeClassA};
 use crate::{reverb::M, FDNReverb, ReverbParameters, LOG_MID};
 
 pub const HEADROOM: f64 = 3.0;
-const G_PRE: f64 = 1.0/HEADROOM;
-const G_POST: f64 = 2.0*HEADROOM;
+const G_PRE: f64 = 1.0;
+const G_POST: f64 = 2.0;
 const F_TRANSFORMER: f64 = 20.0;
 
 const TREBLE_F: f64 = 3000.0;
@@ -35,7 +35,7 @@ impl Channel
         self.z = z_bass*mud + z_mids*mids + z_treble*prescence;
 
         self.z *= G_PRE*gain;
-        self.z = self.tube1.saturate(rate, self.z);
+        self.z = self.tube1.saturate(rate, self.z)/HEADROOM;
         [self.z] = self.filter_transformer[0].filter(rate, self.z);
 
         self.reverb.process1(rate)
@@ -47,7 +47,7 @@ impl Channel
 
         [self.z] = self.filter_transformer[1].filter(rate, self.z);
         self.z *= G_POST;
-        self.z = self.tube2.saturate(rate, self.z);
+        self.z = self.tube2.saturate(rate, self.z)*HEADROOM;
 
         self.z*wet + self.x/LOG_MID*dry
     }

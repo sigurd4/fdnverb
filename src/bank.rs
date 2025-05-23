@@ -1,6 +1,8 @@
 use core::sync::atomic::Ordering;
 
-use crate::{parameters::{ReverbParameters, FREQUENCY_MAX, FREQUENCY_MIN, REVERB_CURVE}, LOG_MID};
+use crate::{parameters::{ReverbParameters, FREQUENCY_MAX, FREQUENCY_MIN, REVERB_CURVE}, EQ_MAX, LOG_MID};
+
+const EQ_MID: f64 = EQ_MAX as f64*LOG_MID;
 
 #[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
 pub struct ReverbBank
@@ -124,15 +126,15 @@ impl ReverbBank
     }
     fn default_prescence() -> f64
     {
-        0.5
+        EQ_MID
     }
     fn default_mids() -> f64
     {
-        0.5
+        EQ_MID
     }
     fn default_mud() -> f64
     {
-        0.5
+        EQ_MID
     }
     fn default_primes() -> f64
     {

@@ -1,7 +1,4 @@
-use core::f64::consts::TAU;
 use std::f64::consts::FRAC_1_SQRT_2;
-
-use crate::NUM_KERNELS;
 
 pub const fn phases<const N: usize>() -> [[f64; N]; N*N]
 {
@@ -22,61 +19,19 @@ pub const fn phases<const N: usize>() -> [[f64; N]; N*N]
     p
 }
 
-pub fn hadamard_kernel(kernel: f64) -> [[f64; 2]; 2]
+const fn hadamard_kernel() -> [[f64; 2]; 2]
 {
-    const KERNELS: [[[f64; 2]; 2]; NUM_KERNELS] = [
-        [
-            [1.0, 1.0],
-            [-1.0, 1.0],
-        ],
-        [
-            [-1.0, 1.0],
-            [-1.0, -1.0]
-        ],
-        [
-            [-1.0, 1.0],
-            [1.0, 1.0]
-        ],
-        [
-            [-1.0, -1.0],
-            [-1.0, 1.0]
-        ],
-        [
-            [1.0, -1.0],
-            [1.0, 1.0]
-        ],
-        [
-            [-1.0, -1.0],
-            [1.0, -1.0]
-        ],
-        [
-            [1.0, 1.0],
-            [1.0, -1.0]
-        ],
-        [
-            [1.0, -1.0],
-            [-1.0, -1.0]
-        ]
-    ];
-
-    let z = kernel*(NUM_KERNELS as f64/TAU);
-    let z0 = z.floor();
-    let j1 = z.ceil() as usize % NUM_KERNELS;
-    let j0 = z0 as usize % NUM_KERNELS;
-    
-    let p = (z - z0).rem_euclid(1.0);
-    let q = 1.0 - p;
-
-    core::array::from_fn(|m| core::array::from_fn(|n| {
-        KERNELS[j0][m][n]*q + KERNELS[j1][m][n]*p
-    }))
+    [
+        [1.0, 1.0],
+        [-1.0, 1.0],
+    ]
 }
 
-pub fn hadamard_matrix<const N: usize>(kernel: f64) -> [[f64; N]; N]
+pub fn hadamard_matrix<const N: usize>() -> [[f64; N]; N]
 where
     [(); (N/2).is_power_of_two() as usize - 1]:
 {
-    let a1 = hadamard_kernel(kernel);
+    let a1 = hadamard_kernel();
     let a0 = (1.0/N as f64).sqrt();
 
     let mut m = [[a0; N]; N];
@@ -102,48 +57,31 @@ where
     m
 }
 
-pub fn hadamard_feedback_matrix<const N: usize>(kernel: f64) -> [[f64; N]; N]
+pub fn hadamard_feedback_matrix<const N: usize>() -> [[f64; N]; N]
 where
     [(); (N/2).is_power_of_two() as usize - 1]:
 {
-    let h = hadamard_matrix(kernel);
-    let mut p = [[0.0; N]; N];
-    let mut i = 0;
-    while i < N/2
+    const fn p<const N: usize>() -> [[f64; N]; N]
     {
-        let mut b = 0;
-        while b < 2
+        let mut p = [[0.0; N]; N];
+        let mut i = 0;
+        while i < N/2
         {
-            p[i*2 + b][i] = if (b == 0) ^ (i*2 + b >= N/2) {FRAC_1_SQRT_2} else {-FRAC_1_SQRT_2};
-            p[i*2 + b][N - 1 - i] = -FRAC_1_SQRT_2;
-            b += 1;
-        }
-        i += 1;
-    }
-    mul_matrix(&p, &h)
-}
-
-pub const fn mul_matrix<const N: usize, const M: usize, const P: usize>(a: &[[f64; N]; M], b: &[[f64; P]; N]) -> [[f64; P]; M]
-{
-    let mut prod = [[0.0; P]; M];
-    let mut m = 0;
-    while m != M
-    {
-        let mut p = 0;
-        while p != P
-        {
-            let mut n = 0;
-            while n != N
+            let mut b = 0;
+            while b < 2
             {
-                prod[m][p] += a[m][n]*b[n][p];
-                n += 1;
+                p[i*2 + b][i] = if (b == 0) ^ (i*2 + b >= N/2) {FRAC_1_SQRT_2} else {-FRAC_1_SQRT_2};
+                p[i*2 + b][N - 1 - i] = -FRAC_1_SQRT_2;
+                b += 1;
             }
-            p += 1;
+            i += 1;
         }
-        m += 1;
+        p
     }
 
-    prod
+    let h = hadamard_matrix();
+    let p = p();
+    mul_matrix(&p, &h)
 }
 
 /*pub fn householder_reflection<const N: usize>() -> [[f64; N]; N]
@@ -183,8 +121,6 @@ where
 #[test]
 fn test()
 {
-    use core::f64::consts::PI;
-
     /*let h = hadamard_matrix::<4>();
     println!("h = {:?}", h);
     let p = [
@@ -194,7 +130,6 @@ fn test()
         [0.0, 0.0, 0.0, 0.0]
     ];
     println!("{:?}", p.mul_matrix(&h))*/
-    println!("{:?}", hadamard_kernel(1.75*PI))
 }
 
 pub const fn is_prime(n: usize) -> bool
@@ -214,7 +149,7 @@ pub const fn is_prime(n: usize) -> bool
     true
 }
 
-pub fn closest_prime(x: f64) -> usize
+pub const fn closest_prime(x: f64) -> usize
 {
     let mut n = 2;
     let mut m = 1;
@@ -262,15 +197,19 @@ pub const fn primes<const N: usize>(start: usize, skip: usize) -> [usize; N]
     let mut i = 0;
     let mut n = start;
     
-    while i/(skip + 1) < N
+    loop
     {
+        let j = i/(skip + 1);
+        if j >= N
+        {
+            break
+        }
         if is_prime(n)
         {
             // n is a prime number
             if i % (skip + 1) == 0
             {
-                p[i/(skip + 1)] = n;
-                //n = (n as f64*scale + add) as usize
+                p[j] = n;
             }
             i += 1;
         }
@@ -280,15 +219,36 @@ pub const fn primes<const N: usize>(start: usize, skip: usize) -> [usize; N]
     p
 }
 
+pub const fn mul_matrix<const N: usize, const M: usize, const P: usize>(a: &[[f64; N]; M], b: &[[f64; P]; N]) -> [[f64; P]; M]
+{
+    let mut prod = [[0.0; P]; M];
+    let mut m = 0;
+    while m != M
+    {
+        let mut p = 0;
+        while p != P
+        {
+            let mut n = 0;
+            while n != N
+            {
+                prod[m][p] += a[m][n]*b[n][p];
+                n += 1;
+            }
+            p += 1;
+        }
+        m += 1;
+    }
+
+    prod
+}
+
 pub fn rmul_matrix_assign_row<const M: usize>(a: &[[f64; M]; M], v: &mut [f64; M])
 {
-    let v0 = *v;
-    for (a, v) in a.iter()
-        .zip(v.iter_mut())
-    {
-        *v = a.iter()
-            .zip(v0.iter())
-            .map(|(&a, &v)| a*v)
+    // This is actually wrong
+    *v = a.map(|rhs| {
+        v.iter()
+            .zip(rhs.into_iter())
+            .map(|(&lhs, &rhs)| lhs*rhs)
             .sum()
-    }
+    })
 }
