@@ -1,4 +1,7 @@
+use core::f64::consts::TAU;
 use std::f64::consts::FRAC_1_SQRT_2;
+
+use crate::NUM_KERNELS;
 
 pub const fn phases<const N: usize>() -> [[f64; N]; N*N]
 {
@@ -19,15 +22,62 @@ pub const fn phases<const N: usize>() -> [[f64; N]; N*N]
     p
 }
 
-pub fn hadamard_matrix<const N: usize>() -> [[f64; N]; N]
+pub fn hadamard_kernel(kernel: f64) -> [[f64; 2]; 2]
+{
+    const KERNELS: [[[f64; 2]; 2]; NUM_KERNELS] = [
+        [
+            [1.0, 1.0],
+            [-1.0, 1.0],
+        ],
+        [
+            [-1.0, 1.0],
+            [-1.0, -1.0]
+        ],
+        [
+            [-1.0, 1.0],
+            [1.0, 1.0]
+        ],
+        [
+            [-1.0, -1.0],
+            [-1.0, 1.0]
+        ],
+        [
+            [1.0, -1.0],
+            [1.0, 1.0]
+        ],
+        [
+            [-1.0, -1.0],
+            [1.0, -1.0]
+        ],
+        [
+            [1.0, 1.0],
+            [1.0, -1.0]
+        ],
+        [
+            [1.0, -1.0],
+            [-1.0, -1.0]
+        ]
+    ];
+
+    let z = kernel*(NUM_KERNELS as f64/TAU);
+    let z0 = z.floor();
+    let j1 = z.ceil() as usize % NUM_KERNELS;
+    let j0 = z0 as usize % NUM_KERNELS;
+    
+    let p = (z - z0).rem_euclid(1.0);
+    let q = 1.0 - p;
+
+    core::array::from_fn(|m| core::array::from_fn(|n| {
+        KERNELS[j0][m][n]*q + KERNELS[j1][m][n]*p
+    }))
+}
+
+pub fn hadamard_matrix<const N: usize>(kernel: f64) -> [[f64; N]; N]
 where
     [(); (N/2).is_power_of_two() as usize - 1]:
 {
+    let a1 = hadamard_kernel(kernel);
     let a0 = (1.0/N as f64).sqrt();
-    let a1 = [
-        [1.0, 1.0],
-        [-1.0, 1.0]
-    ];
 
     let mut m = [[a0; N]; N];
     
@@ -52,11 +102,11 @@ where
     m
 }
 
-pub fn hadamard_feedback_matrix<const N: usize>() -> [[f64; N]; N]
+pub fn hadamard_feedback_matrix<const N: usize>(kernel: f64) -> [[f64; N]; N]
 where
     [(); (N/2).is_power_of_two() as usize - 1]:
 {
-    let h = hadamard_matrix();
+    let h = hadamard_matrix(kernel);
     let mut p = [[0.0; N]; N];
     let mut i = 0;
     while i < N/2
@@ -133,6 +183,8 @@ where
 #[test]
 fn test()
 {
+    use core::f64::consts::PI;
+
     /*let h = hadamard_matrix::<4>();
     println!("h = {:?}", h);
     let p = [
@@ -142,7 +194,7 @@ fn test()
         [0.0, 0.0, 0.0, 0.0]
     ];
     println!("{:?}", p.mul_matrix(&h))*/
-    println!("{:?}", hadamard_feedback_matrix::<4>())
+    println!("{:?}", hadamard_kernel(1.75*PI))
 }
 
 pub const fn is_prime(n: usize) -> bool

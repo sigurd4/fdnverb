@@ -3,7 +3,15 @@ use core::f64::consts::TAU;
 use real_time_fir_iir_filters::{conf::{All, HighPass}, filters::iir::first::FirstOrderFilter, param::{Omega, RC}, rtf::Rtf};
 use saturation::{tubes::Tube12AU7, Triode, TriodeClassA};
 
-use crate::{reverb::M, FDNReverb, ReverbParameters, BASS_F, F_TRANSFORMER, G_POST, G_PRE, LOG_MID, TREBLE_F};
+use crate::{reverb::M, FDNReverb, ReverbParameters, LOG_MID};
+
+pub const HEADROOM: f64 = 3.0;
+const G_PRE: f64 = 1.0/HEADROOM;
+const G_POST: f64 = 2.0*HEADROOM;
+const F_TRANSFORMER: f64 = 20.0;
+
+const TREBLE_F: f64 = 3000.0;
+const BASS_F: f64 = 440.0;
 
 #[derive(Debug, Clone)]
 pub struct Channel
@@ -95,7 +103,7 @@ impl Default for Channel
             ),
             tube2: Triode::new(
                 TriodeClassA {
-                    r_i: R_T,
+                    r_i: R_T + 47e3,
                     r_p: 100e3,
                     v_pp: 410.0,
                     v_c: 2.0

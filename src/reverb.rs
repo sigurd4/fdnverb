@@ -60,13 +60,14 @@ impl FDNReverb
             feedback: 0.0,
             p: [0; _],
             g: [1.0; _],
-            q: util::hadamard_feedback_matrix(),
+            q: util::hadamard_feedback_matrix(0.0),
             z: [0.0; _]
         }
     }
 
     pub fn update(&mut self, params: &ReverbParameters)
     {
+        // Update feedback gains
         let feedback = params.feedback.get() as f64;
         let phase = params.phase.load(Ordering::Relaxed);
         if self.phase != phase || self.feedback != feedback
@@ -80,21 +81,33 @@ impl FDNReverb
             }
         }
 
+        // Update feedback matrix
+        /*let kernel = params.kernel.get() as f64;
+        if self.kernel != kernel
+        {
+            self.kernel = kernel;
+            self.q = util::hadamard_feedback_matrix(kernel)
+        }*/
+
+        // Update filters
         let floor = params.floor.get() as f64*TAU;
         let ceiling = params.ceiling.get() as f64*TAU;
-        for (filter_f, filter_c) in self.f_f.iter_mut()
-            .zip(self.f_c.iter_mut())
+        if self.f_f[0].param.omega != floor
         {
-            if filter_f.param.omega != floor
+            for filter in self.f_f.iter_mut()
             {
-                filter_f.param.omega = floor;
+                filter.param.omega = floor;
             }
-            if filter_c.param.omega != ceiling
+        }
+        if self.f_c[0].param.omega != ceiling
+        {
+            for filter in self.f_c.iter_mut()
             {
-                filter_c.param.omega = ceiling;
+                filter.param.omega = ceiling;
             }
         }
 
+        // Update delay lines
         let prime_curve = params.primes.get() as f64;
         let length = params.length.get() as f64;
         if prime_curve != self.prime_curve || length != self.length
@@ -123,8 +136,8 @@ impl FDNReverb
                 .copied()
                 .unwrap_or(0.0);
 
+            // Apply feedback
             let b = f_f.param.omega > f_c.param.omega;
-
             let z_h;
             [*z, z_h] = {
                 let zz = f_f.filter(rate, *z);
