@@ -1,7 +1,5 @@
 use std::f64::consts::FRAC_1_SQRT_2;
 
-use array_math::{ArrayMath, ArrayOps};
-
 pub const fn phases<const N: usize>() -> [[f64; N]; N*N]
 {
     let mut p = [[0.0; N]; N*N];
@@ -98,10 +96,10 @@ pub const fn mul_matrix<const N: usize, const M: usize, const P: usize>(a: &[[f6
     prod
 }
 
-pub fn householder_reflection<const N: usize>() -> [[f64; N]; N]
+/*pub fn householder_reflection<const N: usize>() -> [[f64; N]; N]
 {
     let a0 = -2.0/N as f64;
-    ArrayOps::fill(|i| ArrayOps::fill(|j| {
+    core::array::from_fn(|i| core::array::from_fn(|j| {
         let mut a = a0;
         if i == j
         {
@@ -109,9 +107,9 @@ pub fn householder_reflection<const N: usize>() -> [[f64; N]; N]
         }
         a
     }))
-}
+}*/
 
-pub fn householder_feedback_matrix<const N: usize>() -> [[f64; N]; N]
+/*pub fn householder_feedback_matrix<const N: usize>() -> [[f64; N]; N]
 where
     [(); (N/4).is_power_of_two() as usize - 1]:
 {
@@ -122,7 +120,7 @@ where
         [-1.0, -1.0, 1.0, -1.0],
         [-1.0, -1.0, -1.0, 1.0]
     ];
-    ArrayOps::fill(|i| ArrayOps::fill(|j| {
+    core::array::from_fn(|i| core::array::from_fn(|j| {
         let mut a = a0;
         for n in 0..N.ilog2()/2
         {
@@ -130,7 +128,7 @@ where
         }
         a
     }))
-}
+}*/
 
 #[test]
 fn test()
@@ -193,12 +191,19 @@ pub fn primes_dist<const N: usize>(curve: f64, max: f64) -> [usize; N]
 where
     [(); N - 2]:
 {
-    let mut x = <[f64; N]>::fill(|i| ((i + 1) as f64/N as f64).powf(curve));
-    x.normalize_assign_to(max);
-
-    x.map(closest_prime)
+    let mut scale = 0.0;
+    let x = core::array::from_fn(|i| {
+        let x = ((i + 1) as f64/N as f64).powf(curve);
+        scale += x*x;
+        x
+    });
+    scale = max/scale.sqrt();
+    x.map(|x| {
+        closest_prime(x*scale)
+    })
 }
 
+#[cfg(test)]
 pub const fn primes<const N: usize>(start: usize, skip: usize) -> [usize; N]
 {
     let mut p = [0; N];
@@ -221,4 +226,17 @@ pub const fn primes<const N: usize>(start: usize, skip: usize) -> [usize; N]
         n += 1;
     }
     p
+}
+
+pub fn rmul_matrix_assign_row<const M: usize>(a: &[[f64; M]; M], v: &mut [f64; M])
+{
+    let v0 = *v;
+    for (a, v) in a.iter()
+        .zip(v.iter_mut())
+    {
+        *v = a.iter()
+            .zip(v0.iter())
+            .map(|(&a, &v)| a*v)
+            .sum()
+    }
 }

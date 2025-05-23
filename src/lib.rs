@@ -1,31 +1,26 @@
 #![feature(variant_count)]
 #![feature(array_chunks)]
-#![feature(array_methods)]
 #![feature(generic_arg_infer)]
 #![feature(more_float_constants)]
 #![feature(array_windows)]
-#![feature(associated_type_bounds)]
 #![feature(portable_simd)]
-#![feature(new_uninit)]
 #![feature(let_chains)]
-#![feature(const_fn_floating_point_arithmetic)]
 #![allow(long_running_const_eval)]
+#![feature(iter_array_chunks)]
+#![feature(allocator_api)]
 
 #![feature(generic_const_exprs)]
 
-use core::f64::consts::LN_2;
-use std::f64::EPSILON;
-use std::f64::consts::TAU;
 use std::sync::Arc;
 
 use num::Float;
-use real_time_fir_iir_filters::{iir::first::{FirstOrderFilter, Omega}, rtf::Rtf};
 use vst::{prelude::*, plugin_main};
 
 moddef::moddef!(
-    flat(pub) mod {
+    flat mod {
+        bank,
+        channel,
         parameters,
-        tube_stage,
         reverb
     },
     mod {
@@ -37,11 +32,31 @@ const CHANNEL_COUNT: usize = 2;
 
 const LOG_MID: f64 = 0.1;
 
+#[cfg(test)]
 #[test]
 fn calc_curve()
 {
     const MID: f64 = 0.991;
     println!("CURVE = {}", -MID.log2())
+}
+
+#[cfg(test)]
+#[test]
+fn it_works()
+{
+    let rate = 44100.0;
+    let x = 1.0;
+
+    let param = ReverbParameters::default();
+
+    let mut c = Channel::default();
+    c.update(&param);
+    
+    let z_avg = *c.process1(rate, x, 0.5, 0.5, 0.5, 0.5);
+    c.process2(rate, &z_avg, 0.5, 0.5, 0.5);
+
+    let z_avg = *c.process1(rate, x, 0.5, 0.5, 0.5, 0.5);
+    c.process2(rate, &z_avg, 0.5, 0.5, 0.5);
 }
 
 //const TREBLE_CUT_CURVE: f64 = 0.15200309344504995;
@@ -57,38 +72,8 @@ const BASS_F: f64 = 440.0;
 struct ReverbPlugin
 {
     pub param: Arc<ReverbParameters>,
-    tube_stage: [TubeStage; CHANNEL_COUNT],
-    filter_transformer: [[FirstOrderFilter<f64>; 2]; CHANNEL_COUNT],
-    tone_stack: [[FirstOrderFilter<f64>; 2]; CHANNEL_COUNT],
-    reverb: [FDNReverb; CHANNEL_COUNT],
+    channels: [Channel; CHANNEL_COUNT],
     rate: f64
-}
-
-#[inline]
-fn soft_clip_max(x: f64, d: f64) -> f64
-{
-    let x = x.max(d);
-    x - 1.0/(EPSILON - d).exp() + 1.0/(x - d).exp()
-}
-
-#[inline]
-fn soft_clip_min(x: f64, d: f64) -> f64
-{
-    let x = x.min(d);
-    x + 1.0/(d - EPSILON).exp() - 1.0/(d - x).exp()
-}
-
-#[inline]
-fn soft_clip(x: f64, min: f64, max: f64) -> f64
-{
-    let x = x.max(min).min(max);
-    x - 1.0/(max - x).exp() + 1.0/(x - min).exp() + 1.0/(max - EPSILON).exp() - 1.0/(EPSILON - min).exp()
-}
-
-#[inline]
-fn x2exp(x: f64) -> f64
-{
-    (x*(2.0/LN_2)).exp2()
 }
 
 impl ReverbPlugin
@@ -98,44 +83,63 @@ impl ReverbPlugin
         let gain = self.param.gain.get() as f64;
         let wet = self.param.wet.get() as f64;
         let dry = self.param.dry.get() as f64;
+        let stereo_separation = self.param.stereo_separation.get() as f64;
+        let stereo_merging = 1.0 - stereo_separation;
         let prescence = self.param.prescence.get() as f64;
         let mids = self.param.mids.get() as f64;
         let mud = self.param.mud.get() as f64;
 
-        for (
-                (c, (input_channel, output_channel)),
-                (((tube_stage, filter_transformer), tone_stack), reverb)
-            ) in buffer.zip()
-            .enumerate()
-            .zip(self.tube_stage.iter_mut()
-                .zip(self.filter_transformer.iter_mut())
-                .zip(self.tone_stack.iter_mut())
-                .zip(self.reverb.iter_mut())
-            )
+        for channel in self.channels.iter_mut()
         {
-            reverb.update(&self.param);
+            channel.update(&self.param);
+        }
 
-            for (input_sample, output_sample) in input_channel.into_iter()
-                .zip(output_channel.into_iter())
+        let (input_buffer, mut output_buffer) = buffer.split();
+
+        let mut input = input_buffer.into_iter().map(|i| i.iter()).array_chunks::<CHANNEL_COUNT>().next().unwrap();
+        let mut output = output_buffer.into_iter().map(|o| o.iter_mut()).array_chunks::<CHANNEL_COUNT>().next().unwrap();
+
+        'lp: loop
+        {
+            let mut z_avg = [0.0; M];
+            for (x, channel) in input.iter_mut()
+                .map(Iterator::next)
+                .zip(self.channels.iter_mut())
             {
-                let x = input_sample.to_f64().unwrap();
+                match x
+                {
+                    Some(&x) => {
+                        let x = x.to_f64().unwrap();
+                        let z = channel.process1(self.rate, x, gain, mud, mids, prescence);
+                        for (z_avg, z) in z_avg.iter_mut()
+                            .zip(z)
+                        {
+                            *z_avg += *z;
+                        }
+                    },
+                    _ => break 'lp
+                }
+            }
 
-                let [z_rest, z_treble] = tone_stack[0].filter(self.rate, x);
-                let [z_bass, z_mids] = tone_stack[1].filter(self.rate, z_rest);
-                let mut z = z_bass*mud + z_mids*mids + z_treble*prescence;
+            {
+                let a = stereo_merging/CHANNEL_COUNT as f64;
+                for z_avg in z_avg.iter_mut()
+                {
+                    *z_avg *= a
+                }
+            }
 
-                z = tube_stage.next(self.rate, z*G_PRE*gain);
-                [_, z] = filter_transformer[0].filter(self.rate, z);
-
-                z = reverb.next(self.rate, z);
-
-                z = if z.is_nan() {0.0} else {soft_clip(z, -30.0, 30.0)};
-
-                [_, z] = filter_transformer[1].filter(self.rate, z);
-                z *= G_POST;
-                let y = if z.is_nan() {0.0} else {soft_clip(z, -30.0, 30.0)};
-
-                *output_sample = F::from(y*wet + x/LOG_MID*dry).unwrap();
+            for (y, channel) in output.iter_mut()
+                .map(Iterator::next)
+                .zip(self.channels.iter_mut())
+            {
+                match y
+                {
+                    Some(y) => {
+                        *y = F::from(channel.process2(self.rate, &z_avg, wet, dry, stereo_separation)).unwrap()
+                    },
+                    _ => break 'lp
+                }
             }
         }
     }
@@ -148,16 +152,9 @@ impl Plugin for ReverbPlugin
     where
         Self: Sized
     {
-        let param = ReverbParameters::default();
-
-        let reverb = [(); _].map(|()| FDNReverb::new());
-
         ReverbPlugin {
-            param: Arc::new(param),
-            tube_stage: [TubeStage::new(); _],
-            filter_transformer: [[FirstOrderFilter::new(Omega::new(TAU*F_TRANSFORMER)); _]; CHANNEL_COUNT],
-            tone_stack: [[FirstOrderFilter::new(Omega::new(TAU*TREBLE_F)), FirstOrderFilter::new(Omega::new(TAU*BASS_F))]; _],
-            reverb,
+            param: Default::default(),
+            channels: Default::default(),
             rate: 44100.0
         }
     }
@@ -207,16 +204,9 @@ impl Plugin for ReverbPlugin
 
     fn suspend(&mut self)
     {
-        for filters in self.filter_transformer.iter_mut()
+        for channel in self.channels.iter_mut()
         {
-            for filter in filters.iter_mut()
-            {
-                filter.reset()
-            }
-        }
-        for reverb in self.reverb.iter_mut()
-        {
-            reverb.suspend();
+            channel.suspend()
         }
     }
 
