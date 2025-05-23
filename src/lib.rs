@@ -13,11 +13,9 @@
 #![feature(array_try_map)]
 #![feature(generic_const_exprs)]
 
-use core::future::{join, Future};
 use std::sync::Arc;
 
 use num::Float;
-use tokio::runtime::Runtime;
 use vst::{prelude::*, plugin_main};
 
 moddef::moddef!(
@@ -69,7 +67,6 @@ const LOG_CURVE: f64 = 3.321928094887362;
 
 struct ReverbPlugin
 {
-    runtime: Runtime,
     pub param: Arc<ReverbParameters>,
     channels: [Channel; CHANNEL_COUNT],
     rate: f64
@@ -98,30 +95,21 @@ impl ReverbPlugin
         let mut input = input_buffer.into_iter().map(|i| i.iter()).array_chunks::<CHANNEL_COUNT>().next().unwrap();
         let mut output = output_buffer.into_iter().map(|o| o.iter_mut()).array_chunks::<CHANNEL_COUNT>().next().unwrap();
 
-        loop
-        {
-            let [z0, z1] = match input.each_mut()
-                .try_map(|input| input.next())
-            {
-                None => break,
-                Some(x) => {
-                    let mut iter = x.into_iter()
-                        .zip(self.channels.iter_mut())
-                        .map(|(x, channel)| async {
-                            let x = x.to_f64().unwrap();
-                            channel.process1(self.rate, x, gain, mud, mids, prescence)
-                        });
-                    core::array::from_fn(|_| unsafe {
-                        iter.next().unwrap_unchecked()
-                    })
-                }
-            };
-            let (z0, z1) = self.runtime.block_on(join!(z0, z1));
-            let z = [z0, z1];
+        let input = input.each_mut();
+        let output = output.each_mut();
 
+        while let (Some(x), Some(y)) = (
+            input.try_map(|input| input.next()),
+            output.try_map(|output| output.next())
+        )
+        {
             let mut z_avg = [0.0; M];
-            for z in z
+
+            for (x, channel) in x.into_iter()
+                .zip(self.channels.iter_mut())
             {
+                let x = x.to_f64().unwrap();
+                let z = channel.process1(self.rate, x, gain, mud, mids, prescence);
                 for (z_avg, z) in z_avg.iter_mut()
                     .zip(z)
                 {
@@ -137,22 +125,11 @@ impl ReverbPlugin
                 }
             }
 
-            let [y0, y1] = match output.each_mut()
-                .try_map(|output| output.next())
+            for (y, channel) in y.into_iter()
+                .zip(self.channels.iter_mut())
             {
-                None => break,
-                Some(y) => {
-                    let mut iter = y.into_iter()
-                        .zip(self.channels.iter_mut())
-                        .map(|(y, channel)| async {
-                            *y = F::from(channel.process2(self.rate, &z_avg, wet, dry, stereo_separation)).unwrap()
-                        });
-                    core::array::from_fn(|_| unsafe {
-                        iter.next().unwrap_unchecked()
-                    })
-                }
-            };
-            let ((), ()) = self.runtime.block_on(join!(y0, y1));
+                *y = F::from(channel.process2(self.rate, &z_avg, wet, dry, stereo_separation)).unwrap()
+            }
         }
     }
 }
@@ -165,11 +142,11 @@ impl Plugin for ReverbPlugin
         Self: Sized
     {
         ReverbPlugin {
-            runtime: tokio::runtime::Builder::new_current_thread()
+            /*runtime: tokio::runtime::Builder::new_current_thread()
                 .global_queue_interval(128)
                 .worker_threads(2)
                 .build()
-                .expect("Invalid runtime."),
+                .expect("Invalid runtime."),*/
             param: Default::default(),
             channels: Default::default(),
             rate: 44100.0
@@ -205,8 +182,7 @@ impl Plugin for ReverbPlugin
             initial_delay: 0,
             preset_chunks: false,
             f64_precision: true,
-            silent_when_stopped: true,
-            ..Default::default()
+            silent_when_stopped: true
         }
     }
 
