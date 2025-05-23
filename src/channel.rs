@@ -6,8 +6,8 @@ use saturation::{tubes::Tube12AU7, Triode, TriodeClassA};
 use crate::{reverb::M, FDNReverb, ReverbParameters, LOG_MID};
 
 pub const HEADROOM: f64 = 3.0;
-const G_PRE: f64 = 1.0;
-const G_POST: f64 = 2.0;
+const G_PRE: f64 = 2.0;
+const G_POST: f64 = 1.0;
 const F_TRANSFORMER: f64 = 20.0;
 
 const TREBLE_F: f64 = 3000.0;

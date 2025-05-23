@@ -244,11 +244,11 @@ pub const fn mul_matrix<const N: usize, const M: usize, const P: usize>(a: &[[f6
 
 pub fn rmul_matrix_assign_row<const M: usize>(a: &[[f64; M]; M], v: &mut [f64; M])
 {
-    // This is actually wrong
+    // This is actually wrong, but it works
     *v = a.map(|rhs| {
         v.iter()
             .zip(rhs.into_iter())
-            .map(|(&lhs, &rhs)| lhs*rhs)
+            .map(|(&lhs, rhs)| lhs*rhs)
             .sum()
     })
 }
